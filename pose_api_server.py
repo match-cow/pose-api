@@ -3,6 +3,7 @@ import os
 import uuid
 import base64
 import json
+import subprocess
 
 app = Flask(__name__)
 
@@ -39,7 +40,7 @@ def pose_estimate():
             f.write(depth_data)
     
     mask_data = base64.b64decode(data['mask'])
-    with open(os.path.join(base, "masks", filename, ".png"), "wb") as f:
+    with open(os.path.join(base, "masks", filename + ".png"), "wb") as f:
         f.write(mask_data)
 
     mesh = data['mesh']
@@ -50,6 +51,31 @@ def pose_estimate():
     with open(os.path.join(base, "mesh", "texture.png"), "wb") as f:
         f.write(base64.b64decode(mesh['texture']))
 
-# test
+    mesh_file_path = os.path.join(base, "mesh", "model.obj")
+
+    run_pose_command = [
+        "python",
+        os.path.join("/home", "match", "FoundationPose", "run_demo.py"),
+        "--test_scene_dir", base,
+        "--mesh_file", mesh_file_path,
+    ]
+
+    try:
+        result = subprocess.run(run_pose_command, capture_output = True, text = True, check = True)
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error":"Pose estimation failed", "details":e.stderr}), 500
+    
+    matrix_path = os.path.join("/home", "match", "FoundationPose", "debug", "ob_in_cam", filename + ".txt")
+
+    with open(matrix_path, "r") as f:
+        matrix_lines = f.readlines()
+
+    matrix = [list(map(float, line.strip().split())) for line in matrix_lines]
+
+    return jsonify({
+        "status": "Pose estimation complete",
+        "transformation_matrix": matrix
+    })
+
 if __name__ == '__main__':
     app.run(host = '0.0.0.0', port = 30823, debug = True)
