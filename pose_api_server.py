@@ -20,10 +20,10 @@ def pose_estimate():
     base = os.path.join("saved_requests", request_id)
     os.makedirs(os.path.join(base, "rgb"), exist_ok = True)
     os.makedirs(os.path.join(base, "depth"), exist_ok = True)
-    os.makedirs(os.path.join(base, "mask"), exist_ok = True)
+    os.makedirs(os.path.join(base, "masks"), exist_ok = True)
     os.makedirs(os.path.join(base, "mesh"), exist_ok = True)
 
-    came_k_path = os.path.join(base, "came_K.txt")
+    came_k_path = os.path.join(base, "cam_K.txt")
     with open(came_k_path, "w") as f:
         for row in data['camera_matrix']:
             f.write(f"{row[0]} {row[1]} {row[2]}\n")
@@ -39,7 +39,7 @@ def pose_estimate():
             f.write(depth_data)
     
     mask_data = base64.b64decode(data['mask'])
-    with open(os.path.join(base, "mask", "masks.png"), "wb") as f:
+    with open(os.path.join(base, "masks", filename, ".png"), "wb") as f:
         f.write(mask_data)
 
     mesh = data['mesh']
@@ -49,6 +49,6 @@ def pose_estimate():
         f.write(base64.b64decode(mesh['mtl']))
     with open(os.path.join(base, "mesh", "texture.png"), "wb") as f:
         f.write(base64.b64decode(mesh['texture']))
-        
+
 if __name__ == '__main__':
     app.run(host = '0.0.0.0', port = 30823, debug = True)
