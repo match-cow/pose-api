@@ -1,11 +1,14 @@
 from flask import Flask, request, jsonify
+from pathlib import Path
 import os
 import uuid
 import base64
-import json
+
 import subprocess
 
 app = Flask(__name__)
+
+FOUNDATION_POSE_DIR = os.path.join(Path.home, "FoundationPose")
 
 @app.route("/")
 def index():
@@ -55,7 +58,7 @@ def pose_estimate():
 
     run_pose_command = [
         "python",
-        os.path.join("/home", "match", "FoundationPose", "run_demo.py"),
+        os.path.join(FOUNDATION_POSE_DIR, "run_demo.py"),
         "--test_scene_dir", base,
         "--mesh_file", mesh_file_path,
     ]
@@ -65,7 +68,10 @@ def pose_estimate():
     except subprocess.CalledProcessError as e:
         return jsonify({"error":"Pose estimation failed", "details":e.stderr}), 500
     
-    matrix_path = os.path.join("/home", "match", "FoundationPose", "debug", "ob_in_cam", filename + ".txt")
+    home_dir = Path.home()
+    foundation_pose_dir = home_dir / "FoundationPose"
+    matrix_path = FOUNDATION_POSE_DIR + 
+
 
     with open(matrix_path, "r") as f:
         matrix_lines = f.readlines()
