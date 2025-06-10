@@ -50,5 +50,6 @@ def pose_estimate():
     with open(os.path.join(base, "mesh", "texture.png"), "wb") as f:
         f.write(base64.b64decode(mesh['texture']))
 
+# test
 if __name__ == '__main__':
     app.run(host = '0.0.0.0', port = 30823, debug = True)
