@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-from pathlib import Path
 import os
 import uuid
 import base64
@@ -8,7 +7,7 @@ import subprocess
 
 app = Flask(__name__)
 
-FOUNDATION_POSE_DIR = os.path.join(Path.home, "FoundationPose")
+FOUNDATION_POSE_DIR = os.path.join(os.path.expanduser("~"), "FoundationPose")
 
 @app.route("/")
 def index():
@@ -68,16 +67,19 @@ def pose_estimate():
     except subprocess.CalledProcessError as e:
         return jsonify({"error":"Pose estimation failed", "details":e.stderr}), 500
     
-    home_dir = Path.home()
-    foundation_pose_dir = home_dir / "FoundationPose"
-    matrix_path = FOUNDATION_POSE_DIR + 
+    matrix_path = os.path.join(FOUNDATION_POSE_DIR, "debug", "ob_in_cam", filename + ".txt")
 
 
     with open(matrix_path, "r") as f:
         matrix_lines = f.readlines()
 
-    matrix = [list(map(float, line.strip().split())) for line in matrix_lines]
-
+    matrix = []
+    for line in matrix_lines:
+        stripped_line = line.strip()
+        row_values = stripped_line.split()
+        float_values = list(map(float, row_values))
+        matrix.append(float_values)
+    
     return jsonify({
         "status": "Pose estimation complete",
         "transformation_matrix": matrix
