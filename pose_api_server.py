@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import os
 import uuid
 import base64
+import numpy as np
 
 import subprocess
 
@@ -17,7 +18,9 @@ def index():
 def pose_estimate():
     data = request.get_json()
     if not data:
-        return jsonify({"error":"Invalid or empty JSON!"}), 400
+        return jsonify({
+            "error":"Invalid or empty JSON!"
+        }), 400
     
     request_id = str(uuid.uuid4())
     base = os.path.join("saved_requests", request_id)
@@ -65,7 +68,10 @@ def pose_estimate():
     try:
         result = subprocess.run(run_pose_command, capture_output = True, text = True, check = True)
     except subprocess.CalledProcessError as e:
-        return jsonify({"error":"Pose estimation failed", "details":e.stderr}), 500
+        return jsonify({
+            "error":"Pose estimation failed",
+            "details":e.stderr
+        }), 500
     
     matrix_path = os.path.join(FOUNDATION_POSE_DIR, "debug", "ob_in_cam", filename + ".txt")
 
@@ -80,6 +86,18 @@ def pose_estimate():
         float_values = list(map(float, row_values))
         matrix.append(float_values)
     
+    rotation_matrix = matrix[:3, :3]
+    identity_matrix = np.eye(3)
+
+    is_orthogonal = np.allclose(rotation_matrix.T @ rotation_matrix, identity_matrix, rtol = 1e-6)
+    has_valid_determinant = np.isclose(np.linalg.det(rotation_matrix), 1.0, rtol = 1e-4)
+
+    if not (is_orthogonal and has_valid_determinant):
+        return jsonify({
+            "error":"Pose estimation error",
+            "details":"Pose estimation returned an invalid rotation matrix"
+        }), 500
+
     return jsonify({
         "status": "Pose estimation complete",
         "transformation_matrix": matrix
