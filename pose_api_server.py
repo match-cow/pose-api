@@ -8,7 +8,7 @@ import subprocess
 
 app = Flask(__name__)
 
-FOUNDATION_POSE_DIR = os.path.join(os.path.expanduser("~"), "FoundationPose")
+FOUNDATION_POSE_DIR = os.environ["DIR"]
 
 @app.route("/")
 def index():
@@ -86,7 +86,9 @@ def pose_estimate():
         float_values = list(map(float, row_values))
         matrix.append(float_values)
     
-    rotation_matrix = matrix[:3, :3]
+    print(matrix)
+
+    rotation_matrix = np.array(matrix)[:3, :3]
     identity_matrix = np.eye(3)
 
     is_orthogonal = np.allclose(rotation_matrix.T @ rotation_matrix, identity_matrix, rtol = 1e-6)
