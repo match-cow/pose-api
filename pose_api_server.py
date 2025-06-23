@@ -3,7 +3,11 @@ import os
 import uuid
 import base64
 import numpy as np
+import json
 
+import sys
+sys.path.append("./FoundationPose")
+from run_demo import run_pose_estimation
 import subprocess
 
 app = Flask(__name__)
@@ -22,8 +26,20 @@ def pose_estimate():
     if not data:
         return jsonify({"error": "Invalid or empty JSON!"}), 400
 
+    try:
+        if isinstance(data, str):
+            data = json.loads(data)
+            
+        for key in ["camera_matrix", "images", "mesh"]:
+            if key in data and isinstance(data[key], str):
+                data[key] = json.loads(data[key])
+    except Exception as e:
+        return jsonify({"error":"Bad request format", "details":str(e)}), 100
+
+    os.makedirs(os.path.join(FOUNDATION_POSE_DIR, "saved_requests"), exist_ok = True)
+
     request_id = str(uuid.uuid4())
-    base = os.path.join("saved_requests", request_id)
+    base = os.path.join(FOUNDATION_POSE_DIR, "saved_requests", request_id)
     os.makedirs(os.path.join(base, "rgb"), exist_ok=True)
     os.makedirs(os.path.join(base, "depth"), exist_ok=True)
     os.makedirs(os.path.join(base, "masks"), exist_ok=True)
@@ -58,25 +74,30 @@ def pose_estimate():
 
     mesh_file_path = os.path.join(base, "mesh", "model.obj")
 
-    run_pose_command = [
-        "python",
-        os.path.join(FOUNDATION_POSE_DIR, "run_demo.py"),
-        "--test_scene_dir",
-        base,
-        "--mesh_file",
-        mesh_file_path,
-    ]
-
+    
+    # run_pose_command = [
+    #     "python",
+    #     os.path.join(FOUNDATION_POSE_DIR, "run_demo.py"),
+    #     "--test_scene_dir",
+    #     base,
+    #     "--mesh_file",
+    #     mesh_file_path,
+    # ]
+ 
+    
     try:
         # result = subprocess.run(run_pose_command, capture_output = True, text = True, check = True)
+        print("Calling run_pose_estimation...")
 
         run_pose_estimation(
             test_scene_dir=base,
             mesh_file=os.path.join(base, "mesh", "model.obj"),
             debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
         )
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": "Pose estimation failed", "details": e.stderr}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # Will print full error in terminal
+        return jsonify({"error": "Pose estimation failed", "details": str(e)}), 500
 
     matrix_path = os.path.join(
         FOUNDATION_POSE_DIR, "debug", "ob_in_cam", filename + ".txt"
@@ -110,13 +131,13 @@ def pose_estimate():
                     "details": "Pose estimation returned an invalid rotation matrix",
                 }
             ),
-            500,
+            600,
         )
 
     return jsonify(
-        {"status": "Pose estimation complete", "transformation_matrix": matrix}
+        {"status": "Pose estimation complete", "transformation_matrix": matrix}, 200
     )
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=30823, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
