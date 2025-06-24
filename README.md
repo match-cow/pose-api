@@ -43,6 +43,7 @@ Content-Type: application/json
   /* optional — ignored right now */
   "depthscale": 0.001             // set if depth is stored in mm
 }
+
 </code>
 (All base-64 values are raw binary files, not JSON-escaped.)
 
@@ -63,6 +64,7 @@ code | meaning                               | payload
 curl -X POST http://localhost:5000/foundationpose \
      -H "Content-Type: application/json"          \
      -d @request.json | jq
+
 </code>
 `request.json` must follow the schema above  
 (all binary blobs already base-64 encoded).
@@ -77,10 +79,14 @@ $DIR/saved_requests/<uuid>/
   ├─ depth/  frame_000.png
   ├─ masks/  frame_000.png
   └─ mesh/   frame_000.ply
+
 </code>
 Pose result (row-major 4 × 4):
 
+<code>
 $DIR/debug/ob_in_cam/frame_000.txt
+
+</code>
 
 -------------------------------------------------------------------------------
 
