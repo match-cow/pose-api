@@ -1,17 +1,16 @@
 from flask import Flask, request, jsonify
-import os
-import uuid
-import base64
 import numpy as np
-import json
+import os, uuid, base64, json, sys, traceback
+import gc
+import torch
 
-import sys
-sys.path.append("./FoundationPose")
+# make FoundationPose importable, assume under same parent directory, change as needed\
+sys.path.append(os.path.join(".", "FoundationPose"))
 from run_demo import run_pose_estimation
-import subprocess
 
 app = Flask(__name__)
 
+# root FoundatoinPose folder that holds weights, debug/, run_demo, etc.
 FOUNDATION_POSE_DIR = os.environ["DIR"]
 
 
@@ -20,24 +19,33 @@ def index():
     return "it is running!"
 
 
-@app.route("/pose/estimate", methods=["POST"])
-def pose_estimate():
+@app.route("/foundationpose", methods=["POST"])
+def foundationpose():
+    # Stage 1: read and sanity-check input
     data = request.get_json()
     if not data:
-        return jsonify({"error": "Invalid or empty JSON!"}), 400
+        return jsonify({"error": "Invalid or empty JSON!"}), 401
 
     try:
+        # handle the case where the body was sent as a JSON-encoded string
         if isinstance(data, str):
             data = json.loads(data)
-            
+
+        # auto-parse nested JSON strings (often happens with form posts)
         for key in ["camera_matrix", "images", "mesh"]:
-            if key in data and isinstance(data[key], str):
+            if (
+                key in data
+                and isinstance(data[key], str)
+                and data[key].lstrip()[:1] in ("{", "[")
+            ):
                 data[key] = json.loads(data[key])
     except Exception as e:
-        return jsonify({"error":"Bad request format", "details":str(e)}), 100
+        traceback.print_exc()
+        return jsonify({"error": "Invalid JSON format!", "details": str(e)}), 402
 
-    os.makedirs(os.path.join(FOUNDATION_POSE_DIR, "saved_requests"), exist_ok = True)
+    os.makedirs(os.path.join(FOUNDATION_POSE_DIR, "saved_requests"), exist_ok=True)
 
+    # Stage 2: save files on disk
     request_id = str(uuid.uuid4())
     base = os.path.join(FOUNDATION_POSE_DIR, "saved_requests", request_id)
     os.makedirs(os.path.join(base, "rgb"), exist_ok=True)
@@ -45,11 +53,13 @@ def pose_estimate():
     os.makedirs(os.path.join(base, "masks"), exist_ok=True)
     os.makedirs(os.path.join(base, "mesh"), exist_ok=True)
 
+    # save intrinsics
     came_k_path = os.path.join(base, "cam_K.txt")
     with open(came_k_path, "w") as f:
         for row in data["camera_matrix"]:
             f.write(f"{row[0]} {row[1]} {row[2]}\n")
 
+    # save images and depth
     for img in data["images"]:
         filename = img["filename"]
         rgb_data = base64.b64decode(img["rgb"])
@@ -60,45 +70,34 @@ def pose_estimate():
         with open(os.path.join(base, "depth", filename + ".png"), "wb") as f:
             f.write(depth_data)
 
+    # save mask
     mask_data = base64.b64decode(data["mask"])
     with open(os.path.join(base, "masks", filename + ".png"), "wb") as f:
         f.write(mask_data)
 
+    # save mesh
     mesh = data["mesh"]
-    with open(os.path.join(base, "mesh", "model.obj"), "wb") as f:
-        f.write(base64.b64decode(mesh["obj"]))
-    with open(os.path.join(base, "mesh", "model.mtl"), "wb") as f:
-        f.write(base64.b64decode(mesh["mtl"]))
-    with open(os.path.join(base, "mesh", "texture.png"), "wb") as f:
-        f.write(base64.b64decode(mesh["texture"]))
+    with open(os.path.join(base, "mesh", filename + ".ply"), "wb") as f:
+        f.write(base64.b64decode(mesh))
 
-    mesh_file_path = os.path.join(base, "mesh", "model.obj")
-
-    
-    # run_pose_command = [
-    #     "python",
-    #     os.path.join(FOUNDATION_POSE_DIR, "run_demo.py"),
-    #     "--test_scene_dir",
-    #     base,
-    #     "--mesh_file",
-    #     mesh_file_path,
-    # ]
- 
-    
+    # Stage 3: call FoundationPose
     try:
-        # result = subprocess.run(run_pose_command, capture_output = True, text = True, check = True)
-        print("Calling run_pose_estimation...")
-
         run_pose_estimation(
             test_scene_dir=base,
-            mesh_file=os.path.join(base, "mesh", "model.obj"),
+            mesh_file=os.path.join(base, "mesh", filename + ".ply"),
             debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
         )
     except Exception as e:
-        import traceback
-        traceback.print_exc()  # Will print full error in terminal
-        return jsonify({"error": "Pose estimation failed", "details": str(e)}), 500
+        # print error in terminal and return error json on failure
+        traceback.print_exc()
+        return jsonify({"error": "Pose estimation failed", "details": str(e)}), 403
+    finally:
+        # free GPU memory for the next request
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+        gc.collect()
 
+    # Stage 4: read result matrix
     matrix_path = os.path.join(
         FOUNDATION_POSE_DIR, "debug", "ob_in_cam", filename + ".txt"
     )
@@ -113,8 +112,7 @@ def pose_estimate():
         float_values = list(map(float, row_values))
         matrix.append(float_values)
 
-    print(matrix)
-
+    # validity check on rotation block
     rotation_matrix = np.array(matrix)[:3, :3]
     identity_matrix = np.eye(3)
 
@@ -124,6 +122,7 @@ def pose_estimate():
     has_valid_determinant = np.isclose(np.linalg.det(rotation_matrix), 1.0, rtol=1e-4)
 
     if not (is_orthogonal and has_valid_determinant):
+        # return error for invalid transformation matrix
         return (
             jsonify(
                 {
@@ -131,13 +130,17 @@ def pose_estimate():
                     "details": "Pose estimation returned an invalid rotation matrix",
                 }
             ),
-            600,
+            500,
         )
 
-    return jsonify(
-        {"status": "Pose estimation complete", "transformation_matrix": matrix}, 200
+    # return success transformation matrix json
+    return (
+        jsonify(
+            {"status": "Pose estimation complete", "transformation_matrix": matrix}
+        ),
+        200,
     )
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
