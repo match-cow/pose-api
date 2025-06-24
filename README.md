@@ -25,7 +25,7 @@ POST /foundationpose
 Content-Type: application/json
 
 ### 2.1 Request body
-<code>
+```
 {
   "camera_matrix": [[fx,0,cx],[0,fy,cy],[0,0,1]],   // 3×3 intrinsics
 
@@ -43,51 +43,45 @@ Content-Type: application/json
   /* optional — ignored right now */
   "depthscale": 0.001             // set if depth is stored in mm
 }
-
-</code>
+```
 (All base-64 values are raw binary files, not JSON-escaped.)
 
 ### 2.2 Response codes
 
 code | meaning                               | payload
 -----|---------------------------------------|---------------------------------------------------------
-200  | success                               | { "status": "...", "transformation_matrix": [[...]] }
-401  | empty body / not JSON                 | { "error": "Invalid or empty JSON!" }
-402  | JSON parse failed                     | { "error": "Invalid JSON format!", "details": "…" }
-403  | pose pipeline crashed                 | { "error": "Pose estimation failed", "details": "…" }
-500  | rotation matrix sanity check failed   | { "error": "Pose estimation error", "details": "…" }
+200  | success                               | <code>{ "status": "...", "transformation_matrix": [[...]] }</code>
+401  | empty body / not JSON                 | <code>{ "error": "Invalid or empty JSON!" }</code>
+402  | JSON parse failed                     | <code>{ "error": "Invalid JSON format!", "details": "…" }</code>
+403  | pose pipeline crashed                 | <code>{ "error": "Pose estimation failed", "details": "…" }</code>
+500  | rotation matrix sanity check failed   | <code>{ "error": "Pose estimation error", "details": "…" }</code>
 
 -------------------------------------------------------------------------------
 
 ## 3. Example (cURL)
-<code>
+```
 curl -X POST http://localhost:5000/foundationpose \
      -H "Content-Type: application/json"          \
      -d @request.json | jq
-
-</code>
+```
 `request.json` must follow the schema above  
 (all binary blobs already base-64 encoded).
 
 -------------------------------------------------------------------------------
 
 ## 4. Files created per request
-<code>
+```
 $DIR/saved_requests/<uuid>/
   ├─ cam_K.txt
   ├─ rgb/    frame_000.png
   ├─ depth/  frame_000.png
   ├─ masks/  frame_000.png
   └─ mesh/   frame_000.ply
-
-</code>
+```
 Pose result (row-major 4 × 4):
-
-<code>
+```
 $DIR/debug/ob_in_cam/frame_000.txt
-
-</code>
-
+```
 -------------------------------------------------------------------------------
 
 ## 5. GPU / memory notes
