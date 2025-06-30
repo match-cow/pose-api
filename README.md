@@ -12,8 +12,9 @@ and returns the 4 × 4 object-in-camera transform.
 | variable | description |
 |----------|-------------|
 | DIR      | **Absolute** path to the *root* of your FoundationPose checkout. 
-```
+
 Must contain `weights/`, `run_demo.py`, `debug/`, … |
+```
 export DIR=/home/user/FoundationPose
 python pose_api_server.py
 ```
