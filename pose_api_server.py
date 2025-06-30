@@ -117,9 +117,9 @@ def foundationpose():
     identity_matrix = np.eye(3)
 
     is_orthogonal = np.allclose(
-        rotation_matrix.T @ rotation_matrix, identity_matrix, rtol=1e-6
+        rotation_matrix.T @ rotation_matrix, identity_matrix, atol=1e-5
     )
-    has_valid_determinant = np.isclose(np.linalg.det(rotation_matrix), 1.0, rtol=1e-4)
+    has_valid_determinant = np.isclose(np.linalg.det(rotation_matrix), 1.0, atol=1e-3)
 
     if not (is_orthogonal and has_valid_determinant):
         # return error for invalid transformation matrix
