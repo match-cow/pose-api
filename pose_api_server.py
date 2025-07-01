@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 import numpy as np
-import os, uuid, base64, json, sys, traceback
+import os, uuid, base64, json, sys, traceback, trimesh, io
 import gc
 import torch
 
@@ -75,10 +75,14 @@ def foundationpose():
     with open(os.path.join(base, "masks", filename + ".png"), "wb") as f:
         f.write(mask_data)
 
-    # save mesh
-    mesh = data["mesh"]
+    # save mesh along converting milimeter to meter
+    mesh_bytes = base64.b64decode(data["mesh"])
+    tm = trimesh.load(io.BytesIO(mesh_bytes), file_type='ply')
+    tm.apply_scale(0.001)
+    scaled_bytes = tm.export(file_type='ply')
+
     with open(os.path.join(base, "mesh", filename + ".ply"), "wb") as f:
-        f.write(base64.b64decode(mesh))
+        f.write(scaled_bytes)
 
     # Stage 3: call FoundationPose
     try:
@@ -144,3 +148,4 @@ def foundationpose():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+
