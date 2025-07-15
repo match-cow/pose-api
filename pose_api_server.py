@@ -27,6 +27,17 @@ def foundationpose():
         return jsonify({"error": "Invalid or empty JSON!"}), 401
 
     try:
+        cam_K = np.asarray(data["camera_matrix"])
+        images = data["images"]
+        b64mask = data["mask"]
+        b64mesh = data["mesh"]
+
+        assert cam_K.shape == (3, 3)
+        assert len(images) > 0
+    except Exception as e:
+        return jsonify({"error": "Invalid JSON format!", "details": e}), 400
+
+    try:
         # handle the case where the body was sent as a JSON-encoded string
         if isinstance(data, str):
             data = json.loads(data)
@@ -77,9 +88,9 @@ def foundationpose():
 
     # save mesh along converting milimeter to meter
     mesh_bytes = base64.b64decode(data["mesh"])
-    tm = trimesh.load(io.BytesIO(mesh_bytes), file_type='ply')
+    tm = trimesh.load(io.BytesIO(mesh_bytes), file_type="ply")
     tm.apply_scale(0.001)
-    scaled_bytes = tm.export(file_type='ply')
+    scaled_bytes = tm.export(file_type="ply")
 
     with open(os.path.join(base, "mesh", filename + ".ply"), "wb") as f:
         f.write(scaled_bytes)
@@ -148,4 +159,3 @@ def foundationpose():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-
