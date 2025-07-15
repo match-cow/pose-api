@@ -21,27 +21,76 @@ def index():
 
 @app.route("/foundationpose", methods=["POST"])
 def foundationpose():
-    # Stage 1: read and sanity-check input
-    data = request.get_json()
-    if not data:
+    # Stage 1: error handlings and sanity checks
+
+    # check for raw json exist
+    data_raw = request.get_json()
+    if not data_raw:
         return jsonify({"error": "Invalid or empty JSON!"}), 401
 
+    if isinstance(data_raw, str):
+        try:
+            # handle the case where the body was sent as a JSON-encoded string
+            data = json.loads(data_raw)
+        except Exception as e:
+            return jsonify({"error":"Invalid JSON format!"}), 401
+    else:
+        data = data_raw
+
+    # check for proper keys / shapes
     try:
         cam_K = np.asarray(data["camera_matrix"])
         images = data["images"]
         b64mask = data["mask"]
         b64mesh = data["mesh"]
-
-        assert cam_K.shape == (3, 3)
-        assert len(images) > 0
     except Exception as e:
-        return jsonify({"error": "Invalid JSON format!", "details": e}), 400
+        return jsonify({"error": "Invalid fields", "details": e}), 400
+    try:
+        assert cam_K.shape == (3, 3) and  len(images) > 0
+    except Exception as e:
+        return jsonify({"error": "Invalid matrix or image", "details": e}), 400
+
+    first_file_name = images[0]["filename"]
+
+    # helper function for b64 decode
+    def _b64_ok(b):
+        try:
+            base64.b64decode(b, validate=True)
+            return True
+        except Exception as e:
+            return False
+
+    # check for proper rgb and depth images
+    index = 0
+    for image_dict in data["images"]:
+        rgb_ok = _b64_ok(image_dict.get("rgb", ""))
+        depth_ok = _b64_ok(image_dict.get("depth", ""))
+
+        if not rgb_ok or not depth_ok:
+            return (
+                jsonify(
+                    {
+                        "error": "Invalid b64 images",
+                        "details": f"images[{index}] failed validation",
+                    }
+                ),
+                400,
+            )
+        index += 1
+
+    # check for proper mesh and mask images
+    if not _b64_ok(data["mesh"]) or not _b64_ok(data["mask"]):
+        return (
+            jsonify(
+                {
+                    "error": "Invalid mesh or mask",
+                    "details": "At least one of the mesh or mask image is invalid for b64 decode",
+                }
+            ),
+            400,
+        )
 
     try:
-        # handle the case where the body was sent as a JSON-encoded string
-        if isinstance(data, str):
-            data = json.loads(data)
-
         # auto-parse nested JSON strings (often happens with form posts)
         for key in ["camera_matrix", "images", "mesh"]:
             if (
@@ -83,7 +132,7 @@ def foundationpose():
 
     # save mask
     mask_data = base64.b64decode(data["mask"])
-    with open(os.path.join(base, "masks", filename + ".png"), "wb") as f:
+    with open(os.path.join(base, "masks", first_file_name + ".png"), "wb") as f:
         f.write(mask_data)
 
     # save mesh along converting milimeter to meter
@@ -92,14 +141,14 @@ def foundationpose():
     tm.apply_scale(0.001)
     scaled_bytes = tm.export(file_type="ply")
 
-    with open(os.path.join(base, "mesh", filename + ".ply"), "wb") as f:
+    with open(os.path.join(base, "mesh", first_file_name + ".ply"), "wb") as f:
         f.write(scaled_bytes)
 
     # Stage 3: call FoundationPose
     try:
         run_pose_estimation(
             test_scene_dir=base,
-            mesh_file=os.path.join(base, "mesh", filename + ".ply"),
+            mesh_file=os.path.join(base, "mesh", first_file_name + ".ply"),
             debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
         )
     except Exception as e:
@@ -114,7 +163,7 @@ def foundationpose():
 
     # Stage 4: read result matrix
     matrix_path = os.path.join(
-        FOUNDATION_POSE_DIR, "debug", "ob_in_cam", filename + ".txt"
+        FOUNDATION_POSE_DIR, "debug", "ob_in_cam", first_file_name + ".txt"
     )
 
     with open(matrix_path, "r") as f:
