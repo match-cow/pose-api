@@ -51,8 +51,8 @@ def foundationpose():
         return jsonify({"error": "Invalid matrix or image", "details": e}), 400
 
     filenames = []
-    for img in range(len(images)):
-        filenames.append(images[img]["filename"])
+    for img in images:
+        filenames.append(img["filename"])
 
     # helper function for b64 decode
     def _b64_ok(b):
@@ -134,7 +134,7 @@ def foundationpose():
 
     # save mask
     mask_data = base64.b64decode(data["mask"])
-    with open(os.path.join(base, "masks", filenames[0] + ".png"), "wb") as f:
+    with open(os.path.join(base, "masks", "mask.png"), "wb") as f:
         f.write(mask_data)
 
     # save mesh along converting milimeter to meter
@@ -143,7 +143,7 @@ def foundationpose():
     tm.apply_scale(0.001)
     scaled_bytes = tm.export(file_type="ply")
 
-    with open(os.path.join(base, "mesh", filenames[0] + ".ply"), "wb") as f:
+    with open(os.path.join(base, "mesh", "object.ply"), "wb") as f:
         f.write(scaled_bytes)
 
     # Stage 3: call FoundationPose
@@ -151,7 +151,7 @@ def foundationpose():
         for filename in filenames:
             run_pose_estimation(
                 test_scene_dir=base,
-                mesh_file=os.path.join(base, "mesh", filename + ".ply"),
+                mesh_file=os.path.join(base, "mesh", "object.ply"),
                 debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
             )
     except Exception as e:
