@@ -51,8 +51,8 @@ def foundationpose():
         return jsonify({"error": "Invalid matrix or image", "details": e}), 400
 
     filenames = []
-    for i in len(images):
-        filename[i] = images[i]["filename"]
+    for img in range(len(images)):
+        filenames.append(images[img]["filename"])
 
     # helper function for b64 decode
     def _b64_ok(b):
@@ -134,7 +134,7 @@ def foundationpose():
 
     # save mask
     mask_data = base64.b64decode(data["mask"])
-    with open(os.path.join(base, "masks", first_file_name + ".png"), "wb") as f:
+    with open(os.path.join(base, "masks", filenames[0] + ".png"), "wb") as f:
         f.write(mask_data)
 
     # save mesh along converting milimeter to meter
@@ -143,15 +143,15 @@ def foundationpose():
     tm.apply_scale(0.001)
     scaled_bytes = tm.export(file_type="ply")
 
-    with open(os.path.join(base, "mesh", first_file_name + ".ply"), "wb") as f:
+    with open(os.path.join(base, "mesh", filenames[0] + ".ply"), "wb") as f:
         f.write(scaled_bytes)
 
     # Stage 3: call FoundationPose
     try:
-        for i in range():
+        for filename in filenames:
             run_pose_estimation(
                 test_scene_dir=base,
-                mesh_file=os.path.join(base, "mesh", first_file_name + ".ply"),
+                mesh_file=os.path.join(base, "mesh", filename + ".ply"),
                 debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
             )
     except Exception as e:
@@ -165,52 +165,56 @@ def foundationpose():
         gc.collect()
 
     # Stage 4: read result matrix
-    matrix_path = os.path.join(
-        FOUNDATION_POSE_DIR, "debug", "ob_in_cam", first_file_name + ".txt"
-    )
-
-    with open(matrix_path, "r") as f:
-        matrix_lines = f.readlines()
-
-    matrix = []
-    for line in matrix_lines:
-        stripped_line = line.strip()
-        row_values = stripped_line.split()
-        float_values = list(map(float, row_values))
-        matrix.append(float_values)
-
-    # validity check on rotation block
-    rotation_matrix = np.array(matrix)[:3, :3]
-    identity_matrix = np.eye(3)
-
-    is_orthogonal = np.allclose(
-        rotation_matrix.T @ rotation_matrix, identity_matrix, atol=1e-5
-    )
-    has_valid_determinant = np.isclose(np.linalg.det(rotation_matrix), 1.0, atol=1e-3)
-
-    if not (is_orthogonal and has_valid_determinant):
-        # return error for invalid transformation matrix
-        return (
-            jsonify(
-                {
-                    "error": "Pose estimation error",
-                    "details": "Pose estimation returned an invalid rotation matrix",
-                }
-            ),
-            500,
+    matrices = []
+    for filename in filenames:
+        matrix_path = os.path.join(
+            FOUNDATION_POSE_DIR, "debug", "ob_in_cam", filename + ".txt"
         )
+
+        with open(matrix_path, "r") as f:
+            matrix_lines = f.readlines()
+        
+        matrix = []
+        for line in matrix_lines:
+            stripped_line = line.strip()
+            row_values = stripped_line.split()
+            float_values = list(map(float, row_values))
+            matrix.append(float_values)
+
+        # validity check on rotation block
+        rotation_matrix = np.array(matrix)[:3, :3]
+        identity_matrix = np.eye(3)
+
+        is_orthogonal = np.allclose(
+            rotation_matrix.T @ rotation_matrix, identity_matrix, atol=1e-5
+        )
+        has_valid_determinant = np.isclose(np.linalg.det(rotation_matrix), 1.0, atol=1e-3)
+
+        if not (is_orthogonal and has_valid_determinant):
+            # return error for invalid transformation matrix
+            return (
+                jsonify(
+                    {
+                        "error": "Pose estimation error",
+                        "details": "Pose estimation returned an invalid rotation matrix",
+                    }
+                ),
+                500,
+            )
+        
+        matrices.append(matrix)
 
     # return success transformation matrix json
     return (
         jsonify(
-            {"status": "Pose estimation complete", "transformation_matrix": matrix}
+            {"status": "Pose estimation complete", "transformation_matrix": matrices}
         ),
         200,
     )
 
-@app.route("/sam6d", methods=["POST"])
-def sam6d():
-    return ({"status":"Pose estimation compelte", "transformation_matrix": matrix}), 200
+# @app.route("/sam6d", methods=["POST"])
+# def sam6d():
+#    return ({"status":"Pose estimation compelte", "transformation_matrix": matrix}), 200
 
 
 if __name__ == "__main__":
