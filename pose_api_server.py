@@ -50,7 +50,9 @@ def foundationpose():
     except Exception as e:
         return jsonify({"error": "Invalid matrix or image", "details": e}), 400
 
-    first_file_name = images[0]["filename"]
+    filenames = []
+    for i in len(images):
+        filename[i] = images[i]["filename"]
 
     # helper function for b64 decode
     def _b64_ok(b):
@@ -146,11 +148,12 @@ def foundationpose():
 
     # Stage 3: call FoundationPose
     try:
-        run_pose_estimation(
-            test_scene_dir=base,
-            mesh_file=os.path.join(base, "mesh", first_file_name + ".ply"),
-            debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
-        )
+        for i in range():
+            run_pose_estimation(
+                test_scene_dir=base,
+                mesh_file=os.path.join(base, "mesh", first_file_name + ".ply"),
+                debug_dir=os.path.join(FOUNDATION_POSE_DIR, "debug"),
+            )
     except Exception as e:
         # print error in terminal and return error json on failure
         traceback.print_exc()
@@ -204,6 +207,10 @@ def foundationpose():
         ),
         200,
     )
+
+@app.route("/sam6d", methods=["POST"])
+def sam6d():
+    return ({"status":"Pose estimation compelte", "transformation_matrix": matrix}), 200
 
 
 if __name__ == "__main__":
