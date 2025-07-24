@@ -118,6 +118,6 @@ gc.collect()
 - Only one object per request (mask + mesh).
 - Mesh must be .ply format.
 - Only tested with FoundationPose under $DIR layout.
-- Flask dev server used — switch to gunicorn for production.
+- Flask dev server used, switch to gunicorn for production.
 
 -------------------------------------------------------------------------------
