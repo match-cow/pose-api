@@ -1,7 +1,10 @@
-# FoundationPose REST API (Flask)
+# 6D Pose Estimation API (Single-Server Flask Backend)
 
-This service exposes NVIDIA **FoundationPose** via a single HTTP POST endpoint.  
-It accepts a calibrated RGB-D snapshot and a mesh model, runs 6-DoF pose estimation, and returns the object-to-camera transform(s) as 4 × 4 matrices.
+This service exposes a REST API for **6-DoF object pose estimation** via a single HTTP POST endpoint.  
+It is designed for standalone GPU servers and runs the pose estimator directly without job scheduling.
+
+The system is **backend-agnostic**, and currently uses [FoundationPose](https://github.com/NVlabs/FoundationPose) as its default model.  
+Inputs are base64-encoded RGB-D + mesh + intrinsics; outputs are object-to-camera transforms (4 × 4 matrices).
 
 -------------------------------------------------------------------------------
 
