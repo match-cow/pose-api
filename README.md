@@ -1,10 +1,10 @@
-# 6D Pose Estimation API (Single-Server Flask Backend)
+# 6D Pose Estimation REST API (Flask)
 
-This service exposes a REST API for **6-DoF object pose estimation** via a single HTTP POST endpoint.  
-It is designed for standalone GPU servers and runs the pose estimator directly without job scheduling.
+This service provides a REST API for 6-DoF object pose estimation using RGB-D input and 3D object meshes.  
+It exposes a single POST endpoint that performs pose inference and returns object-to-camera transforms as 4×4 SE(3) matrices.
 
-The system is **backend-agnostic**, and currently uses [FoundationPose](https://github.com/NVlabs/FoundationPose) as its default model.  
-Inputs are base64-encoded RGB-D + mesh + intrinsics; outputs are object-to-camera transforms (4 × 4 matrices).
+The backend currently integrates **FoundationPose** by default.
+Designed for standalone GPU servers, it loads models once and serves lightweight, repeatable pose estimation jobs.
 
 -------------------------------------------------------------------------------
 
