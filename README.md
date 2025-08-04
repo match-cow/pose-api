@@ -6,13 +6,13 @@ This backend provides a REST API for 6-DoF object pose estimation using RGB-D in
 
 ## 1. Overview
 
-- Input: RGB images, depth maps, a binary segmentation mask, camera intrinsics, and a 3D mesh — all base64-encoded
-- Output: 4×4 object-to-camera transformation matrices (SE3), one per image frame
-- Interface: JSON-over-HTTP via REST
-- Runtime: Docker container on a single-GPU machine
-- Job unit: One object (mesh + mask) per request; multiple frames allowed
+- Input: RGB images, depth maps, a binary segmentation mask, camera intrinsics, and a 3D mesh — all base64-encoded  
+- Output: 4×4 object-to-camera transformation matrices (SE3), one per image frame  
+- Interface: JSON-over-HTTP via REST  
+- Runtime: Docker container on a single-GPU machine  
+- Job unit: One object (mesh + mask) per request; multiple frames allowed  
 
-The server loads the model once and processes jobs one at a time. All job data and results are saved for reproducibility.
+The server loads the model once and processes jobs one at a time. All job data and results are saved for reproducibility. Logs are written to `pose_api.log` in the root directory.
 
 ---
 
@@ -28,6 +28,7 @@ pose-api/
 │   ├── debug/                      # Output SE(3) matrices go here
 │   └── ...
 ├── pose_api_server.py              # Flask API implementation
+├── pose_api.log                    # Flask server log (stdout + errors)
 └── README.md
 ```
 
@@ -74,6 +75,12 @@ This:
 - Mounts the current folder inside the container
 - Sets the environment variable `DIR` (used by the backend code)
 - Runs the Flask API server in the background
+
+Logs are written to `pose_api.log`. You can monitor them using:
+
+```bash
+tail -f pose_api.log
+```
 
 You should now see the server running at:
 
@@ -127,7 +134,6 @@ This endpoint processes one job (one object across multiple frames) and returns 
   "mask": "<base64 encoded PNG>",
   "mesh": "<base64 encoded PLY>"
 }
-
 ```
 
 Notes:
@@ -177,7 +183,6 @@ Tip: If you don’t want to handcraft a test file, modify one of the saved reque
     ...
   ]
 }
-
 ```
 
 Each matrix corresponds to a frame. This matrix maps the object coordinates to the camera frame — it’s an SE(3) transform in row-major order.
@@ -256,10 +261,10 @@ Runs comfortably on 8 GB GPUs (single request at a time).
 
 ## 8. Limitations
 
-- Only one object (mask + mesh) per request
-- `.ply` mesh format only
-- No CPU support — GPU required
-- Flask dev server is not production-ready (use `gunicorn` for deployment)
+- Only one object (mask + mesh) per request  
+- `.ply` mesh format only  
+- No CPU support — GPU required  
+- Flask dev server is not production-ready (use `gunicorn` for deployment)  
 - Only FoundationPose is integrated so far
 
 ---
