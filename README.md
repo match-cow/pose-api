@@ -193,19 +193,21 @@ Pose validity is checked before returning:
 Each job is saved in:
 
 ```
-pose-api/                   # Repository root (mounted inside container)
-└── saved_requests/<uuid>/
-    ├── cam_K.txt
-    ├── rgb/scene1.png
-    ├── depth/scene1.png
-    ├── masks/scene1.png
-    └── mesh/scene1.ply
+pose-api/
+├── FoundationPose/
+│   └── saved_requests/
+│       └── <uuid>/
+│           ├── cam_K.txt
+│           ├── rgb/scene1.png
+│           ├── depth/scene1.png
+│           ├── masks/scene1.png
+│           └── mesh/scene1.ply
 ```
 
 Estimated poses (one per frame):
 
 ```
-$DIR/debug/ob_in_cam/scene1.txt
+pose-api/FoundationPose/debug/ob_in_cam/scene1.txt
 ```
 
 ---
