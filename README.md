@@ -1,98 +1,119 @@
-# 6D Pose Estimation REST API (Flask)
+# 6D Pose Estimation REST API (Flask + Docker)
 
-This service provides a REST API for 6-DoF object pose estimation using RGB-D input and 3D object meshes.  
-It exposes a single POST endpoint that performs pose inference and returns object-to-camera transforms as 4×4 SE(3) matrices.
+This backend provides a REST API for 6-DoF object pose estimation using RGB-D input and a 3D object mesh. It runs inference on a GPU server and returns object-to-camera transformations as 4×4 SE(3) matrices. The backend is general-purpose and modular, with **FoundationPose** currently integrated by default. Additional models can be added with minimal changes.
 
-The backend currently integrates **FoundationPose** by default, with support for additional models planned.  
-Designed for standalone GPU servers, it loads models once and serves lightweight, repeatable pose estimation jobs.
+---
 
--------------------------------------------------------------------------------
+## 1. Overview
 
-## 0. Overview
+- Input: RGB images, depth maps, a binary segmentation mask, camera intrinsics, and a 3D mesh — all base64-encoded
+- Output: 4×4 object-to-camera transformation matrices, one per image frame
+- Interface: JSON-over-HTTP via REST
+- Runtime: Docker container on a single-GPU machine
+- Jobs: One object per request; multiple frames supported
 
-This API enables pose estimation using calibrated RGB-D snapshots and a mesh model.
+The backend loads the model once at server start and processes one job at a time. Outputs are stored in structured directories for reproducibility.
 
-- Input: base64-encoded RGB, depth, mask, and PLY mesh
-- Output: 4×4 object-to-camera transformation matrices (SE3)
-- Runs directly on a single GPU server
-- Models are preloaded and reused between requests
+---
 
--------------------------------------------------------------------------------
+## 2. Repository Structure
 
-## 1. Environment Setup
-
-| Variable | Description |
-|----------|-------------|
-| `DIR`    | **Absolute path** to your pose estimation backend (must include `run_demo.py`, `weights/`, `debug/`, etc.) |
-
-Example:
-
-```bash
-export DIR=/home/user/pose_backend
-python pose_api_server.py
+```
+pose-api/
+├── FoundationPose/                 # Modified version of FoundationPose
+│   ├── docker/
+│   │   └── run_container.sh        # Docker runner script
+│   ├── run_demo.py                 # Integration entry point
+│   ├── weights/                    # Pre-downloaded FoundationPose weights
+│   ├── debug/                      # Output pose matrices saved here
+│   └── ...
+├── pose_api_server.py              # Flask API wrapper
+└── README.md
 ```
 
-Server runs at:
+> A modified copy of [FoundationPose](https://github.com/NVlabs/FoundationPose) is included under `FoundationPose/`, with pretrained weights in `FoundationPose/weights/`.
+
+---
+
+## 3. Clone This Repository
+
+```bash
+git clone https://github.com/match-now/pose-api.git
+```
+
+---
+
+## 4. Build and Run (Docker)
+
+### 4.1 Build Docker Image
+
+```bash
+docker build -t foundationpose:latest .
+```
+
+### 4.2 Start the Server
+
+```bash
+cd pose-api/FoundationPose
+bash docker/run_container.sh
+```
+
+This:
+- Starts the Flask API server inside a GPU-enabled Docker container
+- Mounts the project directory
+- Sets the environment variable `DIR`
+- Runs the server in the background
+
+Server will be available at:
 
 ```
 http://localhost:5000
 ```
 
-Models are loaded once and reused. Flask reloader is off.
+Logs will be written to:
 
--------------------------------------------------------------------------------
+```
+pose-api/
+└── pose_api.log
+```
 
-## 2. API Endpoint
+---
+
+## 5. API Usage
+
+### 5.1 Endpoint
 
 ```
 POST /foundationpose
 Content-Type: application/json
 ```
 
-> Note: The endpoint path is named `/foundationpose` for legacy compatibility but can be changed in `pose_api_server.py`.
-
-### 2.1 Request JSON
+### 5.2 Input Format
 
 ```json
 {
   "camera_matrix": [[fx, 0, cx], [0, fy, cy], [0, 0, 1]],
-
   "images": [
     {
       "filename": "scene1",
-      "rgb": "<base64 PNG>",
-      "depth": "<base64 PNG>"
+      "rgb": "<base64 encoded PNG>",
+      "depth": "<base64 encoded PNG>"
     }
   ],
-
-  "mask": "<base64 PNG>",
-  "mesh": "<base64 PLY>",
-
-  "depthscale": 0.001    // optional, currently ignored
+  "mask": "<base64 encoded PNG>",
+  "mesh": "<base64 encoded PLY>"
 }
 ```
 
 Notes:
-- All base64 fields are raw binary (not escaped).
-- Only `.ply` mesh format is supported.
-- All images must have matching dimensions.
+- All base64 fields must contain raw binary (not escaped)
+- Only `.ply` mesh format is currently supported
+- All images must match in resolution
+- Supports multiple frames per request (single object assumed)
 
-### 2.2 Response Codes
+---
 
-| Code | Meaning                             | Payload |
-|------|-------------------------------------|---------|
-| 200  | Success                             | `{ "status": "...", "transformation_matrix": [ [4x4], … ] }` |
-| 401  | Empty or invalid JSON               | `{ "error": "Invalid or empty JSON!" }` |
-| 402  | Failed to parse JSON (nested str)   | `{ "error": "Invalid JSON format!", "details": "..." }` |
-| 400  | Missing keys / bad base64           | `{ "error": "Invalid fields", "details": "..." }` |
-| 403  | Pipeline crashed                    | `{ "error": "Pose estimation failed", "details": "..." }` |
-| 500  | Matrix sanity check failed          | `{ "error": "Pose estimation error", "details": "..." }` |
-
-Matrices are checked for orthogonality and determinant ≈ 1.
-
--------------------------------------------------------------------------------
-
-## 3. Example (cURL)
+### 5.3 Example Request (cURL)
 
 ```bash
 curl -X POST http://localhost:5000/foundationpose \
@@ -100,67 +121,101 @@ curl -X POST http://localhost:5000/foundationpose \
      -d @request.json | jq
 ```
 
-`request.json` must follow the schema above.  
-Base64 fields must already be encoded PNG/PLY content.
+---
 
--------------------------------------------------------------------------------
+## 6. Output
 
-## 4. Output Files (Per Request)
+### 6.1 JSON Response
+
+```json
+{
+  "status": "Pose estimation complete",
+  "transformation_matrix": [
+    [[...4x4 values...]],
+    ...
+  ]
+}
+```
+
+Each 4×4 matrix corresponds to one image frame.
+
+Matrices are checked for:
+- Orthogonality (RᵀR ≈ I)
+- Determinant ≈ 1
+
+---
+
+### 6.2 Saved Output Files
+
+Saved under:
 
 ```
 $DIR/saved_requests/<uuid>/
 ├── cam_K.txt
-├── rgb/       scene1.png
-├── depth/     scene1.png
-├── masks/     scene1.png
-└── mesh/      scene1.ply    (converted mm → m)
+├── rgb/scene1.png
+├── depth/scene1.png
+├── masks/scene1.png
+└── mesh/scene1.ply
 ```
 
-Pose result:
+Pose matrix per frame:
 
 ```
 $DIR/debug/ob_in_cam/scene1.txt
 ```
 
-Each file is a 4×4 transformation matrix (row-major).
+---
 
--------------------------------------------------------------------------------
-
-## 5. Runtime Behavior / GPU Notes
+## 7. Runtime Behavior
 
 - Models are loaded once at server startup:
   - Score predictor
-  - Refiner
-  - Rasterizer
-- Approximate GPU memory usage:
-  - ~3.3 GB static + ~2.6 GB dynamic = ~5.9 GB
-- Mesh scale is auto-converted via `trimesh.apply_scale(0.001)`
+  - Pose refiner
+  - CUDA rasterizer
+- Meshes are automatically scaled from mm to meters:
+  ```python
+  trimesh.apply_scale(0.001)
+  ```
 - After each request:
+  ```python
+  torch.cuda.empty_cache()
+  torch.cuda.ipc_collect()
+  gc.collect()
+  ```
 
-```python
-torch.cuda.empty_cache()
-torch.cuda.ipc_collect()
-gc.collect()
-```
+### Approximate GPU usage:
+- ~3.3 GB static (model and renderer)
+- ~2.6 GB dynamic (per request)
+- Stable on 8 GB GPUs (single job at a time)
 
-- Works reliably on 8 GB GPUs with one request at a time.
-- Lower memory use possible by reducing image size or batch count.
+---
 
--------------------------------------------------------------------------------
+## 8. Error Handling
 
-## 6. Limitations
+| Code | Meaning                             | Payload |
+|------|-------------------------------------|---------|
+| 200  | Success                             | `{ "status": "...", "transformation_matrix": [...] }` |
+| 400  | Malformed or incomplete fields      | `{ "error": "Invalid fields", "details": "..." }` |
+| 401  | Invalid or missing JSON             | `{ "error": "Invalid or empty JSON!" }` |
+| 402  | Failed to parse nested JSON strings | `{ "error": "Invalid JSON format!", "details": "..." }` |
+| 403  | Inference failure                   | `{ "error": "Pose estimation failed", "details": "..." }` |
+| 500  | Matrix validation failed            | `{ "error": "Pose estimation error", "details": "..." }` |
 
-- Only one object per request (mask + mesh)
+---
+
+## 9. Limitations
+
+- One object per request (mask and mesh shared across all frames)
 - Only `.ply` mesh format supported
-- Only tested using FoundationPose backend under `$DIR` layout
-- Uses Flask development server — not suitable for production use (consider `gunicorn` or similar)
+- No CPU fallback — GPU is required
+- Flask development server is not production-grade (use `gunicorn` if needed)
+- Currently integrated with FoundationPose; architecture allows for plugging in others
 
--------------------------------------------------------------------------------
+---
 
-## 7. License / Attribution
+## 10. Attribution
 
-This project integrates the [FoundationPose](https://github.com/NVlabs/FoundationPose) model for 6D pose estimation and tracking.  
-If you use this system in research or development, please cite the original paper:
+This backend integrates a modified version of [FoundationPose](https://github.com/NVlabs/FoundationPose):
 
 ```bibtex
 @article{wen2023foundationpose,
@@ -173,6 +228,6 @@ If you use this system in research or development, please cite the original pape
 }
 ```
 
-FoundationPose supports both model-based and model-free setups and enables pose estimation and tracking for novel objects without fine-tuning.
+If using this system in research, please cite the original work.
 
--------------------------------------------------------------------------------
+---
